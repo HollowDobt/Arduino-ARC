@@ -59,8 +59,9 @@ void gyro_get(float *fGyro, float *fAngle) {
         WitSerialDataIn(Serial1.read());
     }
     if (g_gyroDataUpdate != 0) {
-        *fGyro = sReg[57] / 32768.0f * 2000.0f;
-        *fAngle = sReg[63] / 32768.0f * 180.0f;
+        *fGyro = sReg[GYRO_Z_REG] / 32768.0f * 2000.0f;
+        *fAngle = sReg[ANGLE_Z_REG] / 32768.0f * 180.0f;
+        /* Use for debugging
         if (g_gyroDataUpdate & GYRO_UPDATE) {
             Serial.print("GyroZ: ");
             Serial.print(*fGyro, 1);
@@ -73,6 +74,7 @@ void gyro_get(float *fGyro, float *fAngle) {
             Serial.print("\r\n");
             g_gyroDataUpdate &= ~ANGLE_UPDATE;
         }
+        */
         g_gyroDataUpdate = 0;
     }
 }
