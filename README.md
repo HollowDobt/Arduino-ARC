@@ -1,6 +1,8 @@
 # New Functions List
 
-All new functions are defined under lib.
+> 本库约定: 驼峰命名法用于变量, 全大写用于常量, 下划线用于类方法.
+>
+> 命名规则: 标准数据类型(如 `uint32_t`)将数据类型小写简写前置(如 `uiXXX`).
 
 ## Sensors Function
 
