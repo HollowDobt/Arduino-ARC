@@ -1,7 +1,5 @@
 #include "lib.h"
 
-#include <cinttypes>
-
 /* NewPing Lib */
 // 获取距离
 inline float ping_distance(NewPing sonar) { return sonar.ping() / 58.82; }
@@ -94,7 +92,7 @@ float current_rpm_fetch(int *oldPosition, unsigned int *oldTime,
 
     if (currentTime - *oldTime >= intervalMs) {
         int pulses = newPosition - *oldPosition;
-        float rpm = (pulses / (float)ENCODER_LINES) * (60000.0 / inintervalMs);
+        float rpm = (pulses / (float)ENCODER_LINES) * (60000.0 / intervalMs);
 
         *oldPosition = newPosition;
         *oldTime = currentTime;

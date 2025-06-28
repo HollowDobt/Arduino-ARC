@@ -2,6 +2,7 @@
  * Author: HollowDobt
  * 实现思路: 有限状态机
  * 方式: 状态更新, 所有函数均无显式长 while 循环, 通过状态更新进入 while,
+
  * 尽可能避免进入死循环.
  * 实现: 所有函数实际上是"单步"的. 禁用函数内部循环
  */
@@ -74,7 +75,7 @@ void loop() {
     switch (currentState) {
         case INIT:
             Serial.println("Car State Init.");
-            posture_change(fAngle, currentState, lastState);
+            posture_change(fAngle, currentState, lastState, distance2);
             if (distance1 > 0.1 && distance1 <= 50) {
                 speed_down();
                 if (distance1 < 40 && distance2 >= 40) {
@@ -89,7 +90,7 @@ void loop() {
             break;
 
         case NORMAL_DRIVE:
-            posture_change(fAngle, currentState, lastState);
+            posture_change(fAngle, currentState, lastState, distance2);
             if (distance1 > 0.1 && distance1 <= 50) {
                 speed_down();
                 if (distance1 < 40 && distance2 >= 40) {
@@ -124,9 +125,10 @@ void loop() {
                     currentState = FINISHED;
                 }
             } else {
-                posture_change(fAngle, currentState, lastState);
+                posture_change(fAngle, currentState, lastState, distance2);
                 speed_control(TARGET_SPEED);
             }
+            break;
 
         case TURN_LEFT:
             turning(/* Left Tangle 90 ... */);
@@ -219,7 +221,7 @@ inline void pid_update() {
     pidBL.Compute();
 }
 
-inline void speed_control(double desiredRPM) {
+inline void speed_control(const float &desireRPM) {
     pidTargetFR = desireRPM;
     pidTargetFL = desireRPM;
     pidTargetBR = desireRPM;

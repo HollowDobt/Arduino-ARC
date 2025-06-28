@@ -35,8 +35,8 @@ constexpr int MAX_DISTANCE = 350;
 
 // PID Action Control
 
-constexpr float TRACK_LENGTH = 100.0f;  // 跑道长度
-constexpr float ACCELERATION = 3.0f;    // 加速度
+constexpr float TRACK_LENGTH = 100.0;  // 跑道长度
+constexpr float ACCELERATION = 3.0;    // 加速度
 constexpr float TARGET_SPEED = 100.0;
 constexpr float LOW_SPEED = 40.0;
 constexpr float ROTATE_PWM = 50.0;
@@ -87,7 +87,7 @@ inline void gyro_get(float *fGyro, float *fAngle);
  * WARNING: Below functions may result in serious errors.
  */
 // Sensors Reading
-float current_rpm_fetch(unsigned int *oldPosition, unsigned int *oldTime,
+float current_rpm_fetch(int *oldPosition, unsigned int *oldTime,
                         const Encoder encoder,
                         const unsigned int intervalMs = DEFAULT_INTERVAL_MS);
 
