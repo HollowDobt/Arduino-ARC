@@ -6,7 +6,19 @@
 #include <NewPing.h>
 #include <PID_v1.h>
 #include <math.h>
+#include <mecanum_driver.h>
 #include <wit_c_sdk.h>
+
+// State Definition
+enum State {
+    INIT,            // 初始状态
+    NORMAL_DRIVE,    // 正常前进状态, 判断避障
+    TURNING,         // 左转状态
+    FINAL_TURN,      // 最后一次逻辑处理状态
+    FINISHED,        // 进入停车状态
+    POSTURE_CHANGE,  // 姿态调整状态
+    POSITION_CHANGE
+};
 
 ////////////////////////
 /* Const Values Table */
@@ -27,10 +39,10 @@ constexpr float CHANGE_ANGLE_TOLERANCE = 0.5;
 //   5V  ------>   VCC
 //  GND  ------>   GND
 
-constexpr int TRIGGER_PIN1 = A0;  // Arduino 中会自行替换 A14
-constexpr int ECHO_PIN1 = A1;
-constexpr int TRIGGER_PIN2 = A2;
-constexpr int ECHO_PIN2 = A3;
+constexpr int TRIGGER_PIN1 = A12;  // Arduino 中会自行替换 A14
+constexpr int ECHO_PIN1 = A13;
+constexpr int TRIGGER_PIN2 = A14;
+constexpr int ECHO_PIN2 = A15;
 constexpr int MAX_DISTANCE = 350;
 
 // PID Action Control
@@ -55,22 +67,31 @@ constexpr int GYRO_Z_REG = 57;
 constexpr int ANGLE_Z_REG = 63;
 
 // Define Encoder Pins
-constexpr int ENCODER_1_A = 11;
-constexpr int ENCODER_1_B = 10;
-constexpr int ENCODER_2_A = ;
-constexpr int ENCODER_2_B = ;
-constexpr int ENCODER_3_A = ;
-constexpr int ENCODER_3_B = ;
-constexpr int ENCODER_4_A = ;
-constexpr int ENCODER_4_B = ;
+constexpr int ENCODER_1_A = A0;
+constexpr int ENCODER_1_B = A1;
+constexpr int ENCODER_2_A = A2;
+constexpr int ENCODER_2_B = A3;
+constexpr int ENCODER_3_A = A4;
+constexpr int ENCODER_3_B = A5;
+constexpr int ENCODER_4_A = A6;
+constexpr int ENCODER_4_B = A7;
 constexpr int ENCODER_LINES = 11;
 constexpr int DEFAULT_INTERVAL_MS = 50;
+
+
+// Define electirc meachine Pins
+constexpr int PINS[12] = {
+    42, 46, 44, // 电机1 fR 
+    43, 47, 45, // 电机2 fL
+    26, 27, 7, // 电机3 bR
+    28, 29, 8, // 电机4 bL
+};
 
 // PID Aims: 分状态不同的目标转速
 
 /* Self-define Functions */
 // 超声波距离测定
-inline float ping_distance(NewPing sonar);
+float ping_distance(NewPing &sonar);
 
 void gyro_sensor_uart_send(uint8_t *uiData, uint32_t uiSize);
 
@@ -78,23 +99,22 @@ void gyro_sensor_data_update(uint32_t uiReg, uint32_t uiRegNum);
 
 void gyro_delay_ms(uint16_t uiMs);
 
-inline void gyro_setup(void);
+void gyro_setup(void);
 
 // 获取偏向角度和角速度
-inline void gyro_get(float *fGyro, float *fAngle);
+void gyro_get(float *fGyro, float *fAngle);
 
 /*
  * WARNING: Below functions may result in serious errors.
  */
 // Sensors Reading
-float current_rpm_fetch(int *oldPosition, unsigned int *oldTime,
-                        const Encoder encoder,
+float current_rpm_fetch(int &oldPosition, unsigned long &oldTime,
+                        const Encoder &encoder,
                         const unsigned int intervalMs = DEFAULT_INTERVAL_MS);
 
 // Posture Adjustment State Function: 状态转移函数(判定是否转移到POSTURE_CHANGE)
-inline void posture_change(const float fAngle);
-
-inline void all_motors_stop(void);
+void posture_change(const float fAngle, State &currentState,
+                           State &lastState, const float &distance2);
 
 /*
  * WARNIG: Above functions may result in serious errors.
@@ -103,16 +123,5 @@ inline void all_motors_stop(void);
 /* Variables Initilaize */
 extern volatile uint8_t g_gyroDataUpdate;
 
-// State Definition
-enum State {
-    INIT,           // 初始状态
-    NORMAL_DRIVE,   // 正常前进状态, 判断避障
-    TURN_LEFT,      // 左转状态
-    TURN_RIGHT,     // 右转状态
-    FINAL_TURN,     // 最后一次逻辑处理状态
-    FINISHED,       // 进入停车状态
-    POSTURE_CHAGE,  // 姿态调整状态
-    POSITION_CHANGE
-};
 
 #endif
