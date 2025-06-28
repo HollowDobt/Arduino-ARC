@@ -1,8 +1,10 @@
 #include "lib.h"
 
+#include <cinttypes>
+
 /* NewPing Lib */
 // 获取距离
-float ping_distance(NewPing sonar) { return sonar.ping() / 58.82; }
+inline float ping_distance(NewPing sonar) { return sonar.ping() / 58.82; }
 
 /* WIT Gyroscope Lib */
 // 定义全局变量(不可优化)
@@ -37,7 +39,7 @@ void gyro_sensor_data_update(uint32_t uiReg, uint32_t uiRegNum) {
 void gyro_delay_ms(uint16_t uiMs) { delay(uiMs); }
 
 // 放在 setup(), gyro 设置
-void gyro_setup() {
+inline void gyro_setup() {
     WitInit(WIT_PROTOCOL_NORMAL, 0x50);
 
     WitSerialWriteRegister(gyro_sensor_uart_send);
@@ -54,13 +56,16 @@ void gyro_setup() {
 
 // 放在 loop(), gyro 调用. 用途是实现函数:   zGyro.getGyro();zAngle.geyAngle();
 // 放入两个变量, 完成自动更新
-void gyro_get(float *fGyro, float *fAngle) {
+inline void gyro_get(float *fGyro, float *fAngle) {
     while (Serial1.available()) {
         WitSerialDataIn(Serial1.read());
     }
     if (g_gyroDataUpdate != 0) {
         *fGyro = sReg[GYRO_Z_REG] / 32768.0f * 2000.0f;
         *fAngle = sReg[ANGLE_Z_REG] / 32768.0f * 180.0f;
+        if (*fAngle > 180) {
+            fAngle =
+        }
         /* Use for debugging
         if (g_gyroDataUpdate & GYRO_UPDATE) {
             Serial.print("GyroZ: ");
@@ -77,4 +82,41 @@ void gyro_get(float *fGyro, float *fAngle) {
         */
         g_gyroDataUpdate = 0;
     }
+}
+
+/* WARNING: Below functions may result in serious errors */
+// Get current rpm
+float current_rpm_fetch(int *oldPosition, unsigned int *oldTime,
+                        const Encoder encoder,
+                        const unsigned int intervalMs = DEFAULT_INTERVAL_MS) {
+    int newPosition = encoder.read();
+    unsigned long currentTime = millis();
+
+    if (currentTime - *oldTime >= intervalMs) {
+        int pulses = newPosition - *oldPosition;
+        float rpm = (pulses / (float)ENCODER_LINES) * (60000.0 / inintervalMs);
+
+        *oldPosition = newPosition;
+        *oldTime = currentTime;
+        return rpm;
+    }
+
+    return -1.0;
+}
+
+// Detect current fAngle to see if there's need in adjusting posture
+inline void posture_change(const float fAngle, State &currentState,
+                           State &lastState) {
+    if (fabs(fAngle) >= NORMAL_ANGLE_TOLERANCE) {
+        lastState = currentState;
+        currentState = POSTURE_CHAGE;
+    }
+}
+
+// Stop all the motors
+inline void all_motors_stop(robot::robot_4_wheels &myRobot) {
+    myRobot.fRight.halt();
+    myRobot.fLeft.halt();
+    myRobot.bRight.halt();
+    myRobot.bLeft.halt();
 }
