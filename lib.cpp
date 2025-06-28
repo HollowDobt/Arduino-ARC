@@ -106,10 +106,14 @@ float current_rpm_fetch(int *oldPosition, unsigned int *oldTime,
 
 // Detect current fAngle to see if there's need in adjusting posture
 inline void posture_change(const float fAngle, State &currentState,
-                           State &lastState) {
+                           State &lastState, const float &distance2) {
     if (fabs(fAngle) >= NORMAL_ANGLE_TOLERANCE) {
         lastState = currentState;
         currentState = POSTURE_CHAGE;
+    }
+    if (distance2 <= 15 || distance2 >= 25) {
+        lastState = currentState;
+        currentState = POSITION_CHANGE;
     }
 }
 

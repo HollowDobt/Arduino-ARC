@@ -35,9 +35,12 @@ constexpr int MAX_DISTANCE = 350;
 
 // PID Action Control
 
-constexpr float TRACK_LENGTH = 100.0f;        // 跑道长度
-constexpr float CURRENT_ACCELERATION = 3.0f;  // 加速度
-constexpr float INTERVAL = 10.0f;             // 一个加速周期
+constexpr float TRACK_LENGTH = 100.0f;  // 跑道长度
+constexpr float ACCELERATION = 3.0f;    // 加速度
+constexpr float TARGET_SPEED = 100.0;
+constexpr float LOW_SPEED = 40.0;
+constexpr float ROTATE_PWM = 50.0;
+constexpr float MOVE_PWMY = 50.0;
 
 // WIT Gyroscope
 constexpr uint8_t ACC_UPDATE = 0x01;
@@ -64,10 +67,6 @@ constexpr int ENCODER_LINES = 11;
 constexpr int DEFAULT_INTERVAL_MS = 50;
 
 // PID Aims: 分状态不同的目标转速
-constexpr float POSTURE_CHANGE_PID_TARGET_FR = 60.0;
-constexpr float POSTURE_CHANGE_PID_TARGET_FL = 60.0;
-constexpr float POSTURE_CHANGE_PID_TARGET_BR = 60.0;
-constexpr float POSTURE_CHANGE_PID_TARGET_BL = 60.0;
 
 /* Self-define Functions */
 // 超声波距离测定
@@ -106,13 +105,14 @@ extern volatile uint8_t g_gyroDataUpdate;
 
 // State Definition
 enum State {
-    INIT,          // 初始状态
-    NORMAL_DRIVE,  // 正常前进状态, 判断避障
-    TURN_LEFT,     // 左转状态
-    TURN_RIGHT,    // 右转状态
-    FINAL_TURN,    // 最后一次逻辑处理状态
-    FINISHED,      // 进入停车状态
-    POSTURE_CHAGE  // 姿态调整状态
+    INIT,           // 初始状态
+    NORMAL_DRIVE,   // 正常前进状态, 判断避障
+    TURN_LEFT,      // 左转状态
+    TURN_RIGHT,     // 右转状态
+    FINAL_TURN,     // 最后一次逻辑处理状态
+    FINISHED,       // 进入停车状态
+    POSTURE_CHAGE,  // 姿态调整状态
+    POSITION_CHANGE
 };
 
 #endif

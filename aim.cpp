@@ -41,23 +41,24 @@ static float pwmFR = 0.0, pwmFL = 0.0, pwmBR = 0.0, pwmBL = 0.0;
 // Initial robot state
 static robot::robot_4_wheels myRobot(/* 补充构造函数 */);
 
+static float pidTargetFR = TARGET_SPEED;
+static float pidTargetFL = TARGET_SPEED;
+static float pidTargetBR = TARGET_SPEED;
+static float pidTargetBL = TARGET_SPEED;
+
 // Initial PID algorithm
-static PID pidFR(&rpmFR, &pwmFR, &POSTURE_CHANGE_PID_TARGET_FR, 2.0, 5.0, 1.0,
-                 DIRECT);
-static PID pidFL(&rpmFL, &pwmFL, &POSTURE_CHANGE_PID_TARGET_FL, 2.0, 5.0, 1.0,
-                 DIRECT);
-static PID pidBR(&rpmBR, &pwmBR, &POSTURE_CHANGE_PID_TARGET_BR, 2.0, 5.0, 1.0,
-                 DIRECT);
-static PID pidBL(&rpmBL, &pwmBL, &POSTURE_CHANGE_PID_TARGET_BL, 2.0, 5.0, 1.0,
-                 DIRECT);
+static PID pidFR(&rpmFR, &pwmFR, &pidTargetFR, 2.0, 5.0, 1.0, DIRECT);
+static PID pidFL(&rpmFL, &pwmFL, &pidTargetFL, 2.0, 5.0, 1.0, DIRECT);
+static PID pidBR(&rpmBR, &pwmBR, &pidTargetBR, 2.0, 5.0, 1.0, DIRECT);
+static PID pidBL(&rpmBL, &pwmBL, &pidTargetBL, 2.0, 5.0, 1.0, DIRECT);
 
 /*
  * 功能集成函数定义在主文件中.
  */
 
-void update_sensors();
-void pid_setup();
-void posture_change_step(const float &fAngle);
+inline void update_sensors();
+inline void pid_setup();
+inline void pid_update(void);
 
 void setup() {
     Serial.begin(115200);
@@ -77,13 +78,13 @@ void loop() {
             if (distance1 > 0.1 && distance1 <= 50) {
                 speed_down();
                 if (distance1 < 40 && distance2 >= 40) {
-                    turn_right();
+                    turning(/* Right Tangle -90 ... */);
                     turnCount++;
                     currentState = NORMAL_DRIVE;
                     return;
                 }
             } else {
-                speed_control();
+                speed_control(TARGET_SPEED);
             }
             break;
 
@@ -100,12 +101,12 @@ void loop() {
                     return;
                 }
             } else {
-                speed_control();
+                speed_control(TARGET_SPEED);
             }
             break;
 
         case TURN_RIGHT:
-            turn_right();
+            turning(/* Right Tangle -90 ... */);
             turnCount++;
             if (turnCount == 6) {
                 currentState = FINAL_TURN;
@@ -118,30 +119,70 @@ void loop() {
             if (distance1 > 0.1 && distance1 <= 50) {
                 speed_down();
                 if (distance1 < 40 && distance2 >= 40) {
-                    turn_left();
+                    turning(/* Left Tangle 90 ... */);
                     small_forward();
                     currentState = FINISHED;
                 }
             } else {
                 posture_change(fAngle, currentState, lastState);
-                speed_control();
+                speed_control(TARGET_SPEED);
             }
 
         case TURN_LEFT:
-            turn_left();
+            turning(/* Left Tangle 90 ... */);
             turnCount++;
             currentState = NORMAL_DRIVE;
             break;
 
         case FINISHED:
-            stop_motor();
             Serial.println("Finished.");
+            all_motors_stop(myRobot);
             while (true);
             break;
 
-        case POSTURE_CHAGE:
-            posture_change_step_1(fAngle, myRobot);
+        case POSTURE_CHANGE:
+            if (fAngle > 0) {
+                robot.fRight.move_cclockwise(ROTATE_PWM);  // 前右轮反转
+                robot.bRight.move_cclockwise(ROTATE_PWM);  // 后右轮反转
+                robot.fLeft.move_clockwise(ROTATE_PWM);    // 前左轮正转
+                robot.bLeft.move_clockwise(ROTATE_PWM);    // 后左轮正转
+            } else {
+                robot.fRight.move_clockwise(ROTATE_PWM);  // 前右轮正转
+                robot.bRight.move_clockwise(ROTATE_PWM);  // 后右轮正转
+                robot.fLeft.move_cclockwise(ROTATE_PWM);  // 前左轮反转
+                robot.bLeft.move_cclockwise(ROTATE_PWM);  // 后左轮反转
+            }
+
             if (fabs(fAngle) <= CHANGE_ANGLE_TOLERANCE) {
+                currentState = lastState;
+                all_motors_stop(myRobot);
+            }
+            break;
+
+        case POSITION_CHANGE:
+            if (distance2 < 15) {
+                // 向前移动
+                robot.fRight.move_clockwise((uint8_t)pwmFR -
+                                            MOVE_PWMY);  // 前右轮正转
+                robot.bRight.move_clockwise((uint8_t)pwmBR +
+                                            MOVE_PWMY);  // 后右轮正转
+                robot.fLeft.move_clockwise((uint8_t)pwmFL +
+                                           MOVE_PWMY);  // 前左轮正转
+                robot.bLeft.move_clockwise((uint8_t)pwmBL -
+                                           MOVE_PWMY);  // 后左轮正转
+            }
+            if (distance2 > 25) {
+                // 向前移动
+                robot.fRight.move_clockwise((uint8_t)pwmFR +
+                                            MOVE_PWMY);  // 前右轮正转
+                robot.bRight.move_clockwise((uint8_t)pwmBR -
+                                            MOVE_PWMY);  // 后右轮正转
+                robot.fLeft.move_clockwise((uint8_t)pwmFL -
+                                           MOVE_PWMY);  // 前左轮正转
+                robot.bLeft.move_clockwise((uint8_t)pwmBL +
+                                           MOVE_PWMY);  // 后左轮正转
+            }
+            if (distance2 >= 15 && distance2 <= 25) {
                 currentState = lastState;
                 all_motors_stop(myRobot);
             }
@@ -157,10 +198,7 @@ inline void update_sensors() {
     rpmFL = current_rpm_fetch(oldPosition2, oldTime, encoder2);
     rpmBR = current_rpm_fetch(oldPosition3, oldTime, encoder3);
     rpmBL = current_rpm_fetch(oldPosition4, oldTime, encoder4);
-    pidFR.Compute();
-    pidFL.Compute();
-    pidBR.Compute();
-    pidBL.Compute();
+    pid_update();
 }
 
 inline void pid_setup() {
@@ -174,38 +212,43 @@ inline void pid_setup() {
     pidBL.SetOutputLimits(0, 255);
 }
 
-inline void posture_change_step_1(const float &fAngle,
-                                  robot::robot_4_wheels &myRobot) {
-    if (fAngle > CHANGE_ANGLE_TOLERANCE) {
-        // 向右偏，需要逆时针旋转纠正
-        myRobot.fRight.move_cclockwise((uint8_t)(pwmFR * 0.6));
-        myRobot.bRight.move_cclockwise((uint8_t)(pwmBR * 0.6));
-        myRobot.fLeft.move_clockwise((uint8_t)(pwmFL * 0.6));
-        myRobot.bLeft.move_clockwise((uint8_t)(pwmBL * 0.6));
-    } else if (fAngle < -CHANGE_ANGLE_TOLERANCE) {
-        // 向左偏，需要顺时针旋转纠正
-        myRobot.fRight.move_clockwise((uint8_t)(pwmFR * 0.6));
-        myRobot.bRight.move_clockwise((uint8_t)(pwmBR * 0.6));
-        myRobot.fLeft.move_cclockwise((uint8_t)(pwmFL * 0.6));
-        myRobot.bLeft.move_cclockwise((uint8_t)(pwmBL * 0.6));
-    }
+inline void pid_update() {
+    pidFR.Compute();
+    pidFL.Compute();
+    pidBR.Compute();
+    pidBL.Compute();
 }
 
-inline void posture_change_step_2(const float &distance1,
-                                  const float &distance2,
-                                  robot::robot_4_wheels &myRobot) {
-    // 如果距离传感器检测到需要前后调整
-    if (distance2 > 0.1 && distance2 < 20) {
-        // 距离太近，需要后退
-        myRobot.fRight.move_clockwise((uint8_t)(pwmFR * 0.4) - 15);
-        myRobot.bRight.move_clockwise((uint8_t)(pwmBR * 0.4) + 15);
-        myRobot.fLeft.move_clockwise((uint8_t)(pwmFL * 0.4) + 15);
-        myRobot.bLeft.move_clockwise((uint8_t)(pwmBL * 0.4) - 15);
-    } else if (distance1 > 0.1 && distance1 > 40) {
-        // 距离太远，需要前进
-        myRobot.fRight.move_clockwise((uint8_t)(pwmFR * 0.4) + 15);
-        myRobot.bRight.move_clockwise((uint8_t)(pwmBR * 0.4) - 15);
-        myRobot.fLeft.move_clockwise((uint8_t)(pwmFL * 0.4) - 15);
-        myRobot.bLeft.move_clockwise((uint8_t)(pwmBL * 0.4) + 15);
+inline void speed_control(double desiredRPM) {
+    pidTargetFR = desireRPM;
+    pidTargetFL = desireRPM;
+    pidTargetBR = desireRPM;
+    pidTargetBL = desireRPM;
+
+    pid_update();
+
+    myRobot.fRight.move_clockwise((uint8_t)pwmFR);
+    myRobot.fLeft.move_clockwise((uint8_t)pwmFL);
+    myRobot.bRight.move_clockwise((uint8_t)pwmBR);
+    myRobot.bLeft.move_clockwise((uint8_t)pwmBL);
+}
+
+inline void speed_down() { speed_control(LOW_SPEED); }
+
+void turning(float TAngle) {
+    if (TAngle > 0) {
+        // 向右转
+        while (fAngle >= TAngle - 3.0 && fAngle <= TAngle + 3.0) {
+            myRobot.move_circular(0, 100, 100, 200);
+        }
+        // 使用wit_init 角度调零
+        WitStartIYAWCali();
+    } else {
+        // 向左转
+        while (fAngle >= TAngle - 3.0 && fAngle <= TAngle + 3.0) {
+            myRobot.move_circular(1, 100, 100, 200);
+        }
+        // 使用wit_init 角度调零
+        WitStartIYAWCali();
     }
 }
