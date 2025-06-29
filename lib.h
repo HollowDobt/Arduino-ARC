@@ -39,10 +39,10 @@ constexpr float CHANGE_ANGLE_TOLERANCE = 0.5;
 //   5V  ------>   VCC
 //  GND  ------>   GND
 
-constexpr int TRIGGER_PIN1 = A12;  // Arduino 中会自行替换 A14
-constexpr int ECHO_PIN1 = A13;
-constexpr int TRIGGER_PIN2 = A14;
-constexpr int ECHO_PIN2 = A15;
+constexpr int TRIGGER_PIN1 = A0;  // Arduino 中会自行替换 A14
+constexpr int ECHO_PIN1 = A1;
+constexpr int TRIGGER_PIN2 = A2;
+constexpr int ECHO_PIN2 = A3;
 constexpr int MAX_DISTANCE = 350;
 
 // PID Action Control
@@ -67,17 +67,18 @@ constexpr int GYRO_Z_REG = 57;
 constexpr int ANGLE_Z_REG = 63;
 
 // Define Encoder Pins
-constexpr int ENCODER_1_A = A0;
-constexpr int ENCODER_1_B = A1;
-constexpr int ENCODER_2_A = A2;
-constexpr int ENCODER_2_B = A3;
-constexpr int ENCODER_3_A = A4;
-constexpr int ENCODER_3_B = A5;
-constexpr int ENCODER_4_A = A6;
-constexpr int ENCODER_4_B = A7;
+constexpr int ENCODER_1_A = A8;
+constexpr int ENCODER_1_B = A9;
+constexpr int ENCODER_2_A = A10;
+constexpr int ENCODER_2_B = A11;
+constexpr int ENCODER_3_A = A12;
+constexpr int ENCODER_3_B = A13;
+constexpr int ENCODER_4_A = A14;
+constexpr int ENCODER_4_B = A15;
 constexpr int ENCODER_LINES = 11;
-constexpr int DEFAULT_INTERVAL_MS = 50;
-
+constexpr float DEFAULT_INTERVAL_MS = 50.0f;
+constexpr uint8_t hallA[4] = {ENCODER_1_A, ENCODER_2_A, ENCODER_3_A, ENCODER_4_A};
+constexpr uint8_t hallB[4] = {ENCODER_1_B, ENCODER_2_B, ENCODER_3_B, ENCODER_4_B};
 
 // Define electirc meachine Pins
 constexpr int PINS[12] = {
@@ -108,9 +109,12 @@ void gyro_get(float *fGyro, float *fAngle);
  * WARNING: Below functions may result in serious errors.
  */
 // Sensors Reading
+
+/*
 float current_rpm_fetch(int &oldPosition, unsigned long &oldTime,
                         const Encoder &encoder,
                         const unsigned int intervalMs = DEFAULT_INTERVAL_MS);
+*/
 
 // Posture Adjustment State Function: 状态转移函数(判定是否转移到POSTURE_CHANGE)
 void posture_change(const float fAngle, State &currentState,

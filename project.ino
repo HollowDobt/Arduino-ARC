@@ -8,6 +8,7 @@
 */
 
 #include "lib.h"
+#include <PinChangeInt.h>
 
 // Initial State
 static State currentState = INIT;
@@ -58,25 +59,44 @@ static float targetAngle = 0.0; // 目标角度
 static bool turningRight = false; // 右转 or 左转?
 static bool finalTurn = false; // 是否最后一次大转弯
 
+// 中断服务函数
+static volatile unsigned long lastPulseTime[4] = {0, 0, 0, 0};
+static volatile unsigned long pulseInterval[4] = {0, 0, 0, 0};
+static volatile float rpm[4] = {0, 0, 0, 0};
+static volatile int8_t direction[4] = {0, 0, 0, 0};
+static volatile bool lastALevel[4] = {0, 0, 0, 0};
+
 /*
  * 功能集成函数定义在主文件中.
  */
 
-void update_sensors();
+void update_sensors(void);
 
-void pid_setup();
+void pid_setup(void);
 
 void pid_update(void);
 
 void all_motors_stop(robot::robot_4_wheels &myRobot);
 
-void small_forward();
+void small_forward(void);
+
+// 中断服务函数
+void hallA_isr(void);
+// void hallB_isr(void);
+void ISR_loop(void);
 
 void setup() {
   Serial.begin(115200);
   Serial1.begin(115200);
   gyro_setup();
   pid_setup();
+
+  // 中断服务初始化
+  for (uint8_t i = 0; i < 4; i ++) {
+    pinMode(hallA[i], INPUT_PULLUP);
+    pinMode(hallB[i], INPUT_PULLUP);
+    PCintPort::attachInterrupt(hallA[i], hallA_isr, CHANGE);
+  }
 }
 
 void loop() {
@@ -216,10 +236,7 @@ void update_sensors() {
   distance1 = ping_distance(sonar1);
   distance2 = ping_distance(sonar2);
   gyro_get(&fGyro, &fAngle);
-  rpmFR = current_rpm_fetch(oldPosition1, oldTime, encoder1);
-  rpmFL = current_rpm_fetch(oldPosition2, oldTime, encoder2);
-  rpmBR = current_rpm_fetch(oldPosition3, oldTime, encoder3);
-  rpmBL = current_rpm_fetch(oldPosition4, oldTime, encoder4);
+  ISR_loop();
   pid_update();
 }
 
@@ -285,7 +302,70 @@ void all_motors_stop(robot::robot_4_wheels &myRobot) {
   myRobot.bLeft.halt();
 }
 
+// 小步幅前进
 void small_forward() {
   myRobot.move_up(100);
   delay(300);
+}
+
+// 中断服务函数
+void hallA_isr() {
+  unsigned long now = micros();
+  for (uint8_t i = 0; i < 4; i ++) {
+    bool aLevel = digitalRead(hallA[i]);
+    if (aLevel != lastALevel[i]) {
+      pulseInterval[i] = now - lastPulseTime[i];
+      lastPulseTime[i] = now;
+
+      bool bLevel = digitalRead(hallB[i]);
+      bool isRising = (!lastALevel[i]) && aLevel;
+      bool isFalling = lastALevel[i] && (!aLevel);
+      lastALevel[i] = aLevel;
+
+      if (isRising) direction[i] = bLevel ? 1 : -1;
+      if (isFalling) direction[i] = bLevel ? -1 : 1;
+
+    }
+  }
+}
+
+void ISR_loop() {
+    static unsigned long lastPrint = 0;
+    unsigned long now = micros();
+
+    // 判停转，长时间无脉冲则rpm归零
+    for (uint8_t i = 0; i < 4; ++i) {
+      const unsigned long timeout_us = 500000; // 0.5秒
+      if (now - lastPulseTime[i] > timeout_us) {
+            rpm[i] = 0.0;
+            direction[i] = 0; // 方向未知
+        } else if (pulseInterval[i] > 0) {
+            // 在主循环安全计算浮点rpm
+            float freq = 1e6 / pulseInterval[i]; // Hz
+            rpm[i] = freq * 60.0 / (ENCODER_LINES * 2); // *2表示A沿全部，按实际分辨率调整
+        }
+    }
+
+
+    rpmFR = rpm[0];
+    rpmFL = rpm[1];
+    rpmBR = rpm[2];
+    rpmBL = rpm[3];
+
+    // 打印
+    if (millis() - lastPrint > 100) {
+        lastPrint = millis();
+        for (uint8_t i = 0; i < 4; ++i) {
+            Serial.print("Wheel");
+            Serial.print(i + 1);
+            Serial.print(": ");
+            Serial.print(rpm[i]);
+            Serial.print(" rpm, Dir: ");
+            if      (direction[i] == 1) Serial.print("FWD");
+            else if (direction[i] == -1) Serial.print("REV");
+            else    Serial.print("STILL");
+            Serial.println();
+        }
+        Serial.println();
+    }
 }

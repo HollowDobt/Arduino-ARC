@@ -81,9 +81,11 @@ void gyro_get(float *fGyro, float *fAngle) {
 
 /* WARNING: Below functions may result in serious errors */
 // Get current rpm
+
+/*
 float current_rpm_fetch(int &oldPosition, unsigned long &oldTime,
                         const Encoder &encoder,
-                        const unsigned int intervalMs = DEFAULT_INTERVAL_MS) {
+                        const unsigned float &intervalMs = DEFAULT_INTERVAL_MS) {
     int newPosition = encoder.read();
     unsigned long currentTime = millis();
 
@@ -98,6 +100,28 @@ float current_rpm_fetch(int &oldPosition, unsigned long &oldTime,
 
     return -1.0;
 }
+*/
+/*
+float current_rpm_fetch(int &oldPosition, unsigned long &oldTime, const int &encoder) {
+    int currentPosition = encoder.read();
+    unsigned long currentTime = micros();
+
+    if (currentPosition != oldPosition) {
+        unsigned long deltaTime = (currentTime >= oldTime) ? 
+                        (currentTime - oldTime) : 
+                        (currentTime + (0xFFFFFFFF - oldTime + 1));
+
+        if (deltaTime > 200 && deltaTime < 1000000) {
+            float rpm = (60.0f * 1e6) / (ENCODER_LINES * deltaTime);
+            oldTime = currentTime;
+            oldPosition = currentPosition;
+            return rpm;
+        }
+    }
+
+    return -1.0f;
+}
+*/
 
 // Detect current fAngle to see if there's need in adjusting posture
 void posture_change(const float fAngle, State &currentState,
