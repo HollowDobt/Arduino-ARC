@@ -11,8 +11,9 @@
 #include <PinChangeInterrupt.h>
 
 // Initial State
-static State currentState = INIT;
-static State lastState = INIT;
+/*  ///////   */
+// static State currentState = INIT;
+// static State lastState = INIT;
 
 // Initial Turns
 static uint8_t turnCount = 0;
@@ -55,16 +56,16 @@ static PID pidBR(&rpmBR, &pwmBR, &pidTargetBR, 2.0, 5.0, 1.0, DIRECT);
 static PID pidBL(&rpmBL, &pwmBL, &pidTargetBL, 2.0, 5.0, 1.0, DIRECT);
 
 // 非阻塞 FSM 化 TURNING 状态必要全局变量
-static float targetAngle = 0.0; // 目标角度
-static bool turningRight = false; // 右转 or 左转?
-static bool finalTurn = false; // 是否最后一次大转弯
+static float targetAngle = 0.0;    // 目标角度
+static bool turningRight = false;  // 右转 or 左转?
+static bool finalTurn = false;     // 是否最后一次大转弯
 
 // 中断服务函数
-static volatile unsigned long lastPulseTime[4] = {0, 0, 0, 0};
-static volatile unsigned long pulseInterval[4] = {0, 0, 0, 0};
-static volatile float rpm[4] = {0, 0, 0, 0};
-static volatile int8_t direction[4] = {0, 0, 0, 0};
-static volatile bool lastALevel[4] = {0, 0, 0, 0};
+static volatile unsigned long lastPulseTime[4] = { 0, 0, 0, 0 };
+static volatile unsigned long pulseInterval[4] = { 0, 0, 0, 0 };
+static volatile float rpm[4] = { 0, 0, 0, 0 };
+static volatile int8_t direction[4] = { 0, 0, 0, 0 };
+static volatile bool lastALevel[4] = { 0, 0, 0, 0 };
 
 /*
  * 功能集成函数定义在主文件中.
@@ -84,6 +85,8 @@ void small_forward(void);
 void hallA_isr(void);
 void ISR_loop(void);
 
+void robot_fsm_step();
+
 void setup() {
   Serial.begin(115200);
   Serial1.begin(115200);
@@ -91,7 +94,7 @@ void setup() {
   pid_setup();
 
   // 中断服务初始化
-  for (uint8_t i = 0; i < 4; i ++) {
+  for (uint8_t i = 0; i < 4; i++) {
     pinMode(hallA[i], INPUT_PULLUP);
     pinMode(hallB[i], INPUT_PULLUP);
     // 使用 PinChangeInterrupt 库注册中断
@@ -99,18 +102,31 @@ void setup() {
   }
 }
 
+// NEWVERSION
+static unsigned long lastStateStep = 0;
+//
+
+static State currentState = FINISHED;
+static State lastState = FINISHED;
+
 void loop() {
   update_sensors();
-  delay(50);
+  unsigned long now = millis();
+  if (now - lastStateStep >= 50) {
+        lastStateStep = now;
+        robot_fsm_step();  // 原switch(currentState){...}结构单独拆函数
+  }
+}
 
-  switch (currentState) {
+void robot_fsm_step() {
+    switch (currentState) {
     case INIT:
       Serial.println("Car State Init.");
       posture_change(fAngle, currentState, lastState, distance2);
       if (distance1 > 0.1 && distance1 <= 50) {
         speed_down();
         if (distance1 < 40 && distance2 >= 40) {
-            // 右转准备, 目标角度确定, 切换状态
+          // 右转准备, 目标角度确定, 切换状态
           targetAngle = fAngle - 90.0;
           turningRight = true;
           finalTurn = false;
@@ -147,21 +163,21 @@ void loop() {
     case TURNING:
       if (fabs(fAngle - targetAngle) > 3.0) {
         if (turningRight) {
-            myRobot.move_circular(0, 100, 100, 200);
+          myRobot.move_circular(0, 100, 100, 200);
         } else {
-            myRobot.move_circular(1, 100, 100, 200);
+          myRobot.move_circular(1, 100, 100, 200);
         }
       } else {
         all_motors_stop(myRobot);
         WitStartIYAWCali();
         turnCount++;
         if (finalTurn) {
-            small_forward();
-            currentState = FINISHED;
+          small_forward();
+          currentState = FINISHED;
         } else if (turnCount == 6) {
-            currentState = FINAL_TURN;
+          currentState = FINAL_TURN;
         } else {
-            currentState = NORMAL_DRIVE;
+          currentState = NORMAL_DRIVE;
         }
       }
       break;
@@ -187,6 +203,7 @@ void loop() {
       all_motors_stop(myRobot);
       while (true) {
         Serial.println("Please turn off the power manually to avoid power consumption.");
+        delay(2000);
       }
       break;
 
@@ -311,7 +328,7 @@ void small_forward() {
 // 中断服务函数
 void hallA_isr() {
   unsigned long now = micros();
-  for (uint8_t i = 0; i < 4; i ++) {
+  for (uint8_t i = 0; i < 4; i++) {
     bool aLevel = digitalRead(hallA[i]);
     if (aLevel != lastALevel[i]) {
       pulseInterval[i] = now - lastPulseTime[i];
@@ -334,14 +351,14 @@ void ISR_loop() {
 
   // 判停转，长时间无脉冲则rpm归零
   for (uint8_t i = 0; i < 4; ++i) {
-    const unsigned long timeout_us = 500000; // 0.5秒
+    const unsigned long timeout_us = 500000;  // 0.5秒
     if (now - lastPulseTime[i] > timeout_us) {
       rpm[i] = 0.0;
-      direction[i] = 0; // 方向未知
+      direction[i] = 0;  // 方向未知
     } else if (pulseInterval[i] > 0) {
       // 在主循环安全计算浮点rpm
-      float freq = 1e6 / pulseInterval[i]; // Hz
-      rpm[i] = freq * 60.0 / (ENCODER_LINES * 2); // *2表示A沿全部，按实际分辨率调整
+      float freq = 1e6 / pulseInterval[i];         // Hz
+      rpm[i] = freq * 60.0 / (ENCODER_LINES * 2);  // *2表示A沿全部，按实际分辨率调整
     }
   }
 
@@ -351,7 +368,7 @@ void ISR_loop() {
   rpmBL = rpm[3];
 
   // 打印
-  if (millis() - lastPrint > 100) {
+  /*if (millis() - lastPrint > 100) {
     lastPrint = millis();
     for (uint8_t i = 0; i < 4; ++i) {
       Serial.print("Wheel");
@@ -359,11 +376,11 @@ void ISR_loop() {
       Serial.print(": ");
       Serial.print(rpm[i]);
       Serial.print(" rpm, Dir: ");
-      if      (direction[i] == 1) Serial.print("FWD");
+      if (direction[i] == 1) Serial.print("FWD");
       else if (direction[i] == -1) Serial.print("REV");
-      else    Serial.print("STILL");
+      else Serial.print("STILL");
       Serial.println();
     }
     Serial.println();
-  }
+  }*/
 }
