@@ -8,7 +8,7 @@
 */
 
 #include "lib.h"
-#include <PinChangeInt.h>
+#include <PinChangeInterrupt.h>
 
 // Initial State
 static State currentState = INIT;
@@ -82,7 +82,6 @@ void small_forward(void);
 
 // 中断服务函数
 void hallA_isr(void);
-// void hallB_isr(void);
 void ISR_loop(void);
 
 void setup() {
@@ -95,7 +94,8 @@ void setup() {
   for (uint8_t i = 0; i < 4; i ++) {
     pinMode(hallA[i], INPUT_PULLUP);
     pinMode(hallB[i], INPUT_PULLUP);
-    PCintPort::attachInterrupt(hallA[i], hallA_isr, CHANGE);
+    // 使用 PinChangeInterrupt 库注册中断
+    attachPinChangeInterrupt(digitalPinToPinChangeInterrupt(hallA[i]), hallA_isr, CHANGE);
   }
 }
 
@@ -324,48 +324,46 @@ void hallA_isr() {
 
       if (isRising) direction[i] = bLevel ? 1 : -1;
       if (isFalling) direction[i] = bLevel ? -1 : 1;
-
     }
   }
 }
 
 void ISR_loop() {
-    static unsigned long lastPrint = 0;
-    unsigned long now = micros();
+  static unsigned long lastPrint = 0;
+  unsigned long now = micros();
 
-    // 判停转，长时间无脉冲则rpm归零
+  // 判停转，长时间无脉冲则rpm归零
+  for (uint8_t i = 0; i < 4; ++i) {
+    const unsigned long timeout_us = 500000; // 0.5秒
+    if (now - lastPulseTime[i] > timeout_us) {
+      rpm[i] = 0.0;
+      direction[i] = 0; // 方向未知
+    } else if (pulseInterval[i] > 0) {
+      // 在主循环安全计算浮点rpm
+      float freq = 1e6 / pulseInterval[i]; // Hz
+      rpm[i] = freq * 60.0 / (ENCODER_LINES * 2); // *2表示A沿全部，按实际分辨率调整
+    }
+  }
+
+  rpmFR = rpm[0];
+  rpmFL = rpm[1];
+  rpmBR = rpm[2];
+  rpmBL = rpm[3];
+
+  // 打印
+  if (millis() - lastPrint > 100) {
+    lastPrint = millis();
     for (uint8_t i = 0; i < 4; ++i) {
-      const unsigned long timeout_us = 500000; // 0.5秒
-      if (now - lastPulseTime[i] > timeout_us) {
-            rpm[i] = 0.0;
-            direction[i] = 0; // 方向未知
-        } else if (pulseInterval[i] > 0) {
-            // 在主循环安全计算浮点rpm
-            float freq = 1e6 / pulseInterval[i]; // Hz
-            rpm[i] = freq * 60.0 / (ENCODER_LINES * 2); // *2表示A沿全部，按实际分辨率调整
-        }
+      Serial.print("Wheel");
+      Serial.print(i + 1);
+      Serial.print(": ");
+      Serial.print(rpm[i]);
+      Serial.print(" rpm, Dir: ");
+      if      (direction[i] == 1) Serial.print("FWD");
+      else if (direction[i] == -1) Serial.print("REV");
+      else    Serial.print("STILL");
+      Serial.println();
     }
-
-
-    rpmFR = rpm[0];
-    rpmFL = rpm[1];
-    rpmBR = rpm[2];
-    rpmBL = rpm[3];
-
-    // 打印
-    if (millis() - lastPrint > 100) {
-        lastPrint = millis();
-        for (uint8_t i = 0; i < 4; ++i) {
-            Serial.print("Wheel");
-            Serial.print(i + 1);
-            Serial.print(": ");
-            Serial.print(rpm[i]);
-            Serial.print(" rpm, Dir: ");
-            if      (direction[i] == 1) Serial.print("FWD");
-            else if (direction[i] == -1) Serial.print("REV");
-            else    Serial.print("STILL");
-            Serial.println();
-        }
-        Serial.println();
-    }
+    Serial.println();
+  }
 }
